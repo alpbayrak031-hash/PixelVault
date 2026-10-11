@@ -2,7 +2,9 @@ import PixelVaultKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The window: image canvas, pattern dictionary beneath it, inspector alongside.
+/// The window: the conversion list on the left and the focused file on the right. The
+/// analysis tools — inspector, pattern dictionary, overlays — stay out of the way until
+/// Advanced is switched on.
 struct ContentView: View {
     @Environment(VaultModel.self) private var model
     @State private var isDropTargeted = false
@@ -10,46 +12,32 @@ struct ContentView: View {
     var body: some View {
         @Bindable var model = model
 
-        VStack(spacing: 0) {
-            ZStack {
-                Theme.canvas
-                if model.hasImage {
-                    CompareView()
-                } else {
-                    WelcomeView()
-                }
-                if let activity = model.activity {
-                    ActivityBadge(text: activity)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 14)
-                        .allowsHitTesting(false)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if model.showsDictionary, model.result != nil {
+        HStack(spacing: 0) {
+            // The list has nothing to show until a file is added.
+            if !model.items.isEmpty {
+                SidebarView()
+                    .frame(width: 280)
+                    .transition(.move(edge: .leading))
                 Divider()
-                DictionaryView()
-                    .frame(height: 232)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            detail
         }
-        .background(Theme.canvas)
-        .overlay {
-            if isDropTargeted { DropHighlight() }
-        }
-        .inspector(isPresented: $model.showsInspector) {
+        .animation(.snappy(duration: 0.25), value: model.items.isEmpty)
+        .inspector(isPresented: $model.showsAdvanced) {
             InspectorView()
                 .inspectorColumnWidth(min: 300, ideal: 330, max: 400)
         }
-        .animation(.snappy(duration: 0.25), value: model.showsDictionary)
+        .overlay {
+            if isDropTargeted { DropHighlight() }
+        }
         .navigationTitle(model.documentName.isEmpty ? "PixelVault" : model.documentName)
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
         .onDrop(of: [.fileURL, .image, .pixv], isTargeted: $isDropTargeted, perform: handleDrop)
-        .fileImporter(isPresented: $model.isImporterPresented, allowedContentTypes: [.image, .pixv]) { outcome in
+        .fileImporter(isPresented: $model.isImporterPresented, allowedContentTypes: [.image, .pixv, .folder],
+                      allowsMultipleSelection: true) { outcome in
             switch outcome {
-            case .success(let url): model.open(url: url)
+            case .success(let urls): model.add(urls, focus: true)
             case .failure(let error): model.errorMessage = error.localizedDescription
             }
         }
@@ -64,6 +52,43 @@ struct ContentView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+    }
+
+    private var detail: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Theme.canvas
+                if model.items.isEmpty {
+                    WelcomeView()
+                } else if let failure = model.focusedFailure {
+                    ContentUnavailableView {
+                        Label("Can't Open “\(model.documentName)”", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(failure)
+                    } actions: {
+                        Button("Remove from List") { model.removeFocused() }
+                    }
+                } else {
+                    CompareView()
+                }
+                if let activity = model.activity {
+                    ActivityBadge(text: activity)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 14)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if model.showsAdvanced, model.result != nil {
+                Divider()
+                DictionaryView()
+                    .frame(height: 232)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .background(Theme.canvas)
+        .animation(.snappy(duration: 0.25), value: model.showsAdvanced)
     }
 
     private var subtitle: String {
@@ -90,32 +115,43 @@ struct ContentView: View {
             Button {
                 model.isImporterPresented = true
             } label: {
-                Label("Open", systemImage: "photo.badge.plus")
+                Label("Add", systemImage: "plus")
             }
-            .help("Open an image or a .pixv file (⌘O)")
+            .help("Add photos, .pixv files or folders (⌘O)")
         }
 
         ToolbarItemGroup(placement: .principal) {
-            Picker("Comparison", selection: $model.viewMode) {
-                ForEach(VaultModel.ViewMode.allCases) { mode in
-                    Label(mode.title, systemImage: mode.symbol).tag(mode)
+            if model.canCompare {
+                Picker("Comparison", selection: $model.viewMode) {
+                    ForEach(VaultModel.ViewMode.allCases) { mode in
+                        Label(mode.title, systemImage: mode.symbol).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .help("Compare with a draggable split or two synchronised panes")
             }
-            .pickerStyle(.segmented)
-            .disabled(!model.canCompare)
-            .help("Compare with a draggable split or two synchronised panes")
 
-            Picker("Overlay", selection: $model.overlay) {
-                ForEach(model.availableOverlays) { overlay in
-                    Text(overlay.title).tag(overlay)
+            if model.showsAdvanced, model.result != nil {
+                Picker("Overlay", selection: $model.overlay) {
+                    ForEach(model.availableOverlays) { overlay in
+                        Text(overlay.title).tag(overlay)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .help("Choose what to draw over the compressed image")
             }
-            .pickerStyle(.segmented)
-            .disabled(model.result == nil)
-            .help("Choose what to draw over the compressed image")
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
+            if let item = model.focusedItem, item.outputURL != nil || item.fileURL != nil {
+                Button {
+                    model.reveal(item)
+                } label: {
+                    Label("Show in Finder", systemImage: "folder")
+                }
+                .help(item.outputURL == nil ? "Show the original in Finder" : "Show the converted file in Finder")
+            }
+
             Menu {
                 Button("PixelVault Image (.pixv)…") { model.exportPixelVault() }
                 Button("Decoded PNG…") { model.exportPNG() }
@@ -123,47 +159,43 @@ struct ContentView: View {
                 Label("Export", systemImage: "square.and.arrow.up")
             }
             .disabled(model.result == nil)
-            .help("Export the compressed file, or its decoded pixels")
+            .help("Save a copy somewhere else")
 
-            Button {
-                model.showsDictionary.toggle()
-            } label: {
-                Label("Dictionary", systemImage: "square.grid.4x3.fill")
+            Toggle(isOn: $model.showsAdvanced) {
+                Label("Advanced", systemImage: "slider.horizontal.3")
+                    .labelStyle(.titleAndIcon)
             }
-            .help("Show or hide the pattern dictionary")
-
-            Button {
-                model.showsInspector.toggle()
-            } label: {
-                Label("Inspector", systemImage: "sidebar.trailing")
-            }
-            .help("Show or hide the inspector")
+            .help("Show or hide the inspector, pattern dictionary and overlays")
         }
     }
 
     // MARK: Drop
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
         let model = model
+        var accepted = false
 
-        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                Task { @MainActor in model.open(url: url) }
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    Task { @MainActor in model.add([url]) }
+                }
+                accepted = true
+                continue
             }
-            return true
-        }
-        // Images dragged out of other apps arrive as data rather than files.
-        for type in [UTType.pixv, .image] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
-            let name = provider.suggestedName ?? "Dropped Image"
-            _ = provider.loadDataRepresentation(for: type) { data, _ in
-                guard let data else { return }
-                Task { @MainActor in model.open(data: data, name: name) }
+            // Images dragged out of other apps arrive as data rather than files.
+            for type in [UTType.pixv, .image] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                let name = provider.suggestedName ?? "Dropped Image"
+                _ = provider.loadDataRepresentation(for: type) { data, _ in
+                    guard let data else { return }
+                    Task { @MainActor in model.add(data: data, name: name) }
+                }
+                accepted = true
+                break
             }
-            return true
         }
-        return false
+        return accepted
     }
 }
 
@@ -201,9 +233,9 @@ struct WelcomeView: View {
                 .frame(width: 92, height: 92)
 
             VStack(spacing: 8) {
-                Text("Drop a photo to compress it")
+                Text("Drop photos to convert them")
                     .font(.system(size: 26, weight: .semibold, design: .rounded))
-                Text("PixelVault rebuilds your image from a small dictionary of 4×4 patterns.\nOpen a JPEG, PNG or HEIC to convert it — or a .pixv file to look inside.")
+                Text("Each photo becomes a small .pixv file, saved right beside the original.\nDrop as many as you like — or whole folders. Drop .pixv files to view them or turn them back into PNGs.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -214,14 +246,14 @@ struct WelcomeView: View {
                 Button {
                     model.isImporterPresented = true
                 } label: {
-                    Label("Open Image…", systemImage: "folder")
+                    Label("Choose Files…", systemImage: "folder")
                         .padding(.horizontal, 6)
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
 
                 Button {
-                    model.openSample()
+                    model.addSample()
                 } label: {
                     Label("Try the Sample", systemImage: "sparkles")
                         .padding(.horizontal, 6)
@@ -230,7 +262,7 @@ struct WelcomeView: View {
             .controlSize(.large)
         }
         .padding(48)
-        .frame(maxWidth: 620)
+        .frame(maxWidth: 640)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1.5, dash: [8, 7]))

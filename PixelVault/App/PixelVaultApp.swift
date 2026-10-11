@@ -9,35 +9,46 @@ struct PixelVaultApp: App {
             ContentView()
                 .environment(model)
                 .preferredColorScheme(.dark)
-                .frame(minWidth: 1040, minHeight: 660)
-                .onOpenURL { model.open(url: $0) }
+                .frame(minWidth: 900, minHeight: 600)
+                // Files opened from Finder — double-clicked .pixv files included — land here.
+                .onOpenURL { model.add([$0], focus: true) }
                 #if DEBUG
                 .task { DebugAutomation.start(model: model) }
                 #endif
         }
-        .defaultSize(width: 1440, height: 900)
+        .defaultSize(width: 1400, height: 860)
         .commands { AppCommands(model: model) }
     }
 }
 
-/// Menu-bar commands. Everything here is also reachable from the toolbar.
+/// Menu-bar commands. Everything here is also reachable from the window.
 struct AppCommands: Commands {
     @Bindable var model: VaultModel
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Open…") { model.isImporterPresented = true }
+            Button("Add Files…") { model.isImporterPresented = true }
                 .keyboardShortcut("o")
-            Button("Open Sample Image") { model.openSample() }
+            Button("Add Sample Image") { model.addSample() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             Divider()
-            Button("Close Image") { model.closeDocument() }
-                .keyboardShortcut("w", modifiers: [.command, .shift])
-                .disabled(!model.hasImage)
+            Button("Show in Finder") {
+                if let item = model.focusedItem { model.reveal(item) }
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(model.focusedItem?.fileURL == nil)
+            Button("Remove from List") { model.removeFocused() }
+                .keyboardShortcut(.delete)
+                .disabled(model.focusedItem == nil)
+            Button("Clear List") { model.clearList() }
+                .disabled(model.items.isEmpty)
         }
         CommandGroup(replacing: .saveItem) {
+            Button("Save All .pixv Files as PNG") { model.saveAllPNG() }
+                .disabled(model.pixelVaultItemsWithoutPNG.isEmpty)
+            Divider()
             Button("Export as PixelVault Image…") { model.exportPixelVault() }
-                .keyboardShortcut("s")
+                .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(model.result == nil)
             Button("Export Decoded PNG…") { model.exportPNG() }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
@@ -48,13 +59,6 @@ struct AppCommands: Commands {
                 ForEach(VaultModel.ViewMode.allCases) { Text($0.title).tag($0) }
             }
             .disabled(!model.canCompare)
-            Picker("Overlay", selection: $model.overlay) {
-                ForEach(Array(model.availableOverlays.enumerated()), id: \.element) { index, overlay in
-                    Text(overlay.title).tag(overlay)
-                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
-                }
-            }
-            .disabled(model.result == nil)
             Divider()
             Button("Zoom In") { model.viewport.zoom(by: 1.5) }
                 .keyboardShortcut("+")
@@ -66,10 +70,15 @@ struct AppCommands: Commands {
                 .keyboardShortcut("0")
                 .disabled(!model.hasImage)
             Divider()
-            Toggle("Pattern Dictionary", isOn: $model.showsDictionary)
-                .keyboardShortcut("d", modifiers: [.command, .option])
-            Toggle("Inspector", isOn: $model.showsInspector)
-                .keyboardShortcut("i", modifiers: [.command, .option])
+            Toggle("Advanced Tools", isOn: $model.showsAdvanced)
+                .keyboardShortcut("a", modifiers: [.command, .option])
+            Picker("Overlay", selection: $model.overlay) {
+                ForEach(Array(model.availableOverlays.enumerated()), id: \.element) { index, overlay in
+                    Text(overlay.title).tag(overlay)
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                }
+            }
+            .disabled(!model.showsAdvanced || model.result == nil)
             Divider()
         }
     }

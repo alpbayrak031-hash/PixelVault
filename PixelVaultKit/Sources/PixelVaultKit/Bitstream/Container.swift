@@ -240,13 +240,17 @@ enum Container {
         var patterns: Range<Int>
     }
 
-    static func read(_ bytes: [UInt8]) throws -> (image: CodedImage, sizes: Sizes) {
+    /// Parses a file. With `reduction > 0` the finest pyramid levels are left undecoded, which
+    /// yields an image `2^reduction` times smaller for a fraction of the work — the pyramid
+    /// makes every `.pixv` its own thumbnail.
+    static func read(_ bytes: [UInt8], reduction: Int = 0) throws -> (image: CodedImage, sizes: Sizes) {
         var reader = ByteReader(bytes)
         let header = try PIXVHeader(reading: &reader)
         guard CRC32.checksum(bytes, range: reader.offset..<bytes.count) == header.checksum else {
             throw PIXVError.checksumMismatch
         }
         let geometry = PIXVGeometry(width: header.width, height: header.height, lumaLevels: header.lumaLevels)
+        precondition((0...header.lumaLevels).contains(reduction), "reduction exceeds the pyramid depth")
 
         var sizes: Sizes = [.container: PIXVFormat.headerSize]
         var codebookLayouts: [CodebookLayout] = []
@@ -384,10 +388,13 @@ enum Container {
             case symbols([UInt16])
         }
 
+        // First level each plane decodes; everything finer is skipped at reduced size.
+        let firstLevel = planeLayouts.map { geometry.skippedLevels(for: $0.kind, reduction: reduction) }
+
         var jobs: [Job] = []
         for (planeIndex, plane) in planeLayouts.enumerated() {
             jobs.append(.structure(plane: planeIndex))
-            for (level, levelLayout) in plane.levels.enumerated() {
+            for (level, levelLayout) in plane.levels.enumerated() where level >= firstLevel[planeIndex] {
                 for (stage, stageLayout) in levelLayout.stages.enumerated() where stageLayout.symbolCount > 0 {
                     jobs.append(.indices(plane: planeIndex, level: level, stage: stage))
                     jobs.append(.gains(plane: planeIndex, level: level, stage: stage))
@@ -405,7 +412,7 @@ enum Container {
                     let base = try BaseLayerCodec.decode(bytes, range: layout.base, width: size.width >> levelCount,
                                                          height: size.height >> levelCount, step: layout.baseStep)
                     var modes = [[UInt8]](repeating: [], count: levelCount)
-                    for level in (0..<levelCount).reversed() {
+                    for level in (firstLevel[planeIndex]..<levelCount).reversed() {
                         let blocksWide = (size.width >> level) / PIXVFormat.blockSize
                         let blocksHigh = (size.height >> level) / PIXVFormat.blockSize
                         let parent = level + 1 < levelCount
@@ -457,7 +464,7 @@ enum Container {
             let size = geometry.planeSize(for: layout.kind)
             let stageCount = layout.codebookIDs.count
             var levels: [LevelCoding] = []
-            for level in layout.levels.indices {
+            for level in firstLevel[planeIndex]..<layout.levels.count {
                 var coding = LevelCoding(blocksWide: (size.width >> level) / PIXVFormat.blockSize,
                                          blocksHigh: (size.height >> level) / PIXVFormat.blockSize,
                                          stages: stageCount)
@@ -478,6 +485,7 @@ enum Container {
                                            gainStepHalves: layout.gainStepHalves, codebookIDs: layout.codebookIDs,
                                            base: structure.base, levels: levels))
         }
+        image.reduction = reduction
         return (image, sizes)
     }
 }

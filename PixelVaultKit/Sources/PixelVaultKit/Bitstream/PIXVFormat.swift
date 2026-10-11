@@ -217,6 +217,13 @@ struct PIXVGeometry: Equatable {
         kind.isChroma ? chromaLevels : lumaLevels
     }
 
+    /// How many of a plane's finest levels to leave out so the whole image comes out
+    /// `2^reduction` times smaller. Chroma already sits one halving below luma, so it drops
+    /// one level fewer and lands on the same size.
+    func skippedLevels(for kind: PIXVPlaneKind, reduction: Int) -> Int {
+        min(levels(for: kind), kind.isChroma ? max(0, reduction - 1) : reduction)
+    }
+
     func planeSize(for kind: PIXVPlaneKind) -> (width: Int, height: Int) {
         kind.isChroma ? (paddedWidth / 2, paddedHeight / 2) : (paddedWidth, paddedHeight)
     }

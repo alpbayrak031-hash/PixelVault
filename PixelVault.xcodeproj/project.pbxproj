@@ -8,19 +8,70 @@
 
 /* Begin PBXBuildFile section */
 		A1F0000000000000000000A1 /* PixelVaultKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F0000000000000000000B1 /* PixelVaultKit */; };
+		A1F0000000000000000001A1 /* PixelVaultKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F0000000000000000001B1 /* PixelVaultKit */; };
+		A1F0000000000000000001A2 /* PixelVaultKit in Frameworks */ = {isa = PBXBuildFile; productRef = A1F0000000000000000001B2 /* PixelVaultKit */; };
+		A1F0000000000000000001A3 /* PixelVaultThumbnail.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1F000000000000000000101 /* PixelVaultThumbnail.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1F0000000000000000001A4 /* PixelVaultPreview.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1F000000000000000000102 /* PixelVaultPreview.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1F000000000000000000150 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1F000000000000000000050 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1F000000000000000000140;
+			remoteInfo = PixelVaultThumbnail;
+		};
+		A1F000000000000000000151 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1F000000000000000000050 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1F000000000000000000141;
+			remoteInfo = PixelVaultPreview;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A1F000000000000000000160 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1F0000000000000000001A3 /* PixelVaultThumbnail.appex in Embed Foundation Extensions */,
+				A1F0000000000000000001A4 /* PixelVaultPreview.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A1F000000000000000000001 /* PixelVault.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PixelVault.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1F000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1F000000000000000000003 /* PixelVault.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PixelVault.entitlements; sourceTree = "<group>"; };
 		A1F000000000000000000004 /* PIXV-Format.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "PIXV-Format.md"; sourceTree = "<group>"; };
+		A1F000000000000000000101 /* PixelVaultThumbnail.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PixelVaultThumbnail.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1F000000000000000000102 /* PixelVaultPreview.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PixelVaultPreview.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1F000000000000000000103 /* Thumbnail-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Thumbnail-Info.plist"; sourceTree = "<group>"; };
+		A1F000000000000000000104 /* Preview-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Preview-Info.plist"; sourceTree = "<group>"; };
+		A1F000000000000000000105 /* Extension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Extension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A1F000000000000000000010 /* PixelVault */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PixelVault;
+			sourceTree = "<group>";
+		};
+		A1F000000000000000000110 /* PixelVaultThumbnail */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PixelVaultThumbnail;
+			sourceTree = "<group>";
+		};
+		A1F000000000000000000111 /* PixelVaultPreview */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PixelVaultPreview;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +85,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1F000000000000000000120 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1F0000000000000000001A1 /* PixelVaultKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1F000000000000000000121 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1F0000000000000000001A2 /* PixelVaultKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -41,6 +108,8 @@
 			isa = PBXGroup;
 			children = (
 				A1F000000000000000000010 /* PixelVault */,
+				A1F000000000000000000110 /* PixelVaultThumbnail */,
+				A1F000000000000000000111 /* PixelVaultPreview */,
 				A1F000000000000000000031 /* Config */,
 				A1F000000000000000000033 /* Docs */,
 				A1F000000000000000000032 /* Products */,
@@ -52,6 +121,9 @@
 			children = (
 				A1F000000000000000000002 /* Info.plist */,
 				A1F000000000000000000003 /* PixelVault.entitlements */,
+				A1F000000000000000000103 /* Thumbnail-Info.plist */,
+				A1F000000000000000000104 /* Preview-Info.plist */,
+				A1F000000000000000000105 /* Extension.entitlements */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -60,6 +132,8 @@
 			isa = PBXGroup;
 			children = (
 				A1F000000000000000000001 /* PixelVault.app */,
+				A1F000000000000000000101 /* PixelVaultThumbnail.appex */,
+				A1F000000000000000000102 /* PixelVaultPreview.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -82,10 +156,13 @@
 				A1F000000000000000000021 /* Sources */,
 				A1F000000000000000000020 /* Frameworks */,
 				A1F000000000000000000022 /* Resources */,
+				A1F000000000000000000160 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A1F000000000000000000152 /* PBXTargetDependency */,
+				A1F000000000000000000153 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A1F000000000000000000010 /* PixelVault */,
@@ -98,6 +175,52 @@
 			productReference = A1F000000000000000000001 /* PixelVault.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A1F000000000000000000140 /* PixelVaultThumbnail */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1F000000000000000000161 /* Build configuration list for PBXNativeTarget "PixelVaultThumbnail" */;
+			buildPhases = (
+				A1F000000000000000000122 /* Sources */,
+				A1F000000000000000000120 /* Frameworks */,
+				A1F000000000000000000124 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A1F000000000000000000110 /* PixelVaultThumbnail */,
+			);
+			name = PixelVaultThumbnail;
+			packageProductDependencies = (
+				A1F0000000000000000001B1 /* PixelVaultKit */,
+			);
+			productName = PixelVaultThumbnail;
+			productReference = A1F000000000000000000101 /* PixelVaultThumbnail.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A1F000000000000000000141 /* PixelVaultPreview */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1F000000000000000000162 /* Build configuration list for PBXNativeTarget "PixelVaultPreview" */;
+			buildPhases = (
+				A1F000000000000000000123 /* Sources */,
+				A1F000000000000000000121 /* Frameworks */,
+				A1F000000000000000000125 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A1F000000000000000000111 /* PixelVaultPreview */,
+			);
+			name = PixelVaultPreview;
+			packageProductDependencies = (
+				A1F0000000000000000001B2 /* PixelVaultKit */,
+			);
+			productName = PixelVaultPreview;
+			productReference = A1F000000000000000000102 /* PixelVaultPreview.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -109,6 +232,12 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					A1F000000000000000000040 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					A1F000000000000000000140 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					A1F000000000000000000141 = {
 						CreatedOnToolsVersion = 27.0;
 					};
 				};
@@ -131,12 +260,28 @@
 			projectRoot = "";
 			targets = (
 				A1F000000000000000000040 /* PixelVault */,
+				A1F000000000000000000140 /* PixelVaultThumbnail */,
+				A1F000000000000000000141 /* PixelVaultPreview */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A1F000000000000000000022 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1F000000000000000000124 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1F000000000000000000125 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -153,7 +298,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1F000000000000000000122 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1F000000000000000000123 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1F000000000000000000152 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1F000000000000000000140 /* PixelVaultThumbnail */;
+			targetProxy = A1F000000000000000000150 /* PBXContainerItemProxy */;
+		};
+		A1F000000000000000000153 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1F000000000000000000141 /* PixelVaultPreview */;
+			targetProxy = A1F000000000000000000151 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A1F000000000000000000070 /* Debug */ = {
@@ -260,6 +432,110 @@
 			};
 			name = Release;
 		};
+		A1F000000000000000000172 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Extension.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Thumbnail-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "PixelVault Thumbnails";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pixelvault.PixelVault.Thumbnail;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		A1F000000000000000000173 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Extension.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Thumbnail-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "PixelVault Thumbnails";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pixelvault.PixelVault.Thumbnail;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		A1F000000000000000000174 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Extension.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Preview-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "PixelVault Preview";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pixelvault.PixelVault.Preview;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		A1F000000000000000000175 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Extension.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Preview-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "PixelVault Preview";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pixelvault.PixelVault.Preview;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -281,6 +557,24 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A1F000000000000000000161 /* Build configuration list for PBXNativeTarget "PixelVaultThumbnail" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1F000000000000000000172 /* Debug */,
+				A1F000000000000000000173 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1F000000000000000000162 /* Build configuration list for PBXNativeTarget "PixelVaultPreview" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1F000000000000000000174 /* Debug */,
+				A1F000000000000000000175 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -292,6 +586,14 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		A1F0000000000000000000B1 /* PixelVaultKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PixelVaultKit;
+		};
+		A1F0000000000000000001B1 /* PixelVaultKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PixelVaultKit;
+		};
+		A1F0000000000000000001B2 /* PixelVaultKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PixelVaultKit;
 		};

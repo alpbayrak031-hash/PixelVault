@@ -5,9 +5,8 @@ import SwiftUI
 /// Scripted UI driving for debug builds, used to capture the window in known states.
 ///
 /// Set `PIXELVAULT_AUTOMATION` to a `;`-separated script, for example
-/// `open=sample;wait;overlay=blocks;zoom=6;snap=blocks;quit`. Files are read from, and
-/// screenshot requests exchanged in, `PixelVaultAutomation/` in the app's temporary
-/// directory — the only place a sandboxed build may touch without a file panel.
+/// `sample;wait;advanced=1;overlay=blocks;zoom=6;snap=blocks;quit`. Screenshot requests are
+/// exchanged through `PixelVaultAutomation/` in the temporary directory.
 @MainActor
 enum DebugAutomation {
     static var directory: URL {
@@ -30,19 +29,30 @@ enum DebugAutomation {
             let numbers = value.split(separator: ",").compactMap { Double($0) }
 
             switch name {
-            case "open":
-                if value == "sample" {
-                    model.openSample()
-                } else {
-                    model.open(url: directory.appendingPathComponent(value))
+            case "add":
+                // Comma-separated paths; relative ones are looked up in the automation directory.
+                let urls = value.split(separator: ",").map { path -> URL in
+                    path.hasPrefix("/") ? URL(fileURLWithPath: String(path)) : directory.appendingPathComponent(String(path))
                 }
+                model.add(urls, focus: true)
+            case "sample":
+                model.addSample()
+            case "focus":
+                if let index = numbers.first.map(Int.init), model.items.indices.contains(index) {
+                    model.focusedID = model.items[index].id
+                }
+            case "advanced":
+                model.showsAdvanced = value != "0"
+            case "savepng":
+                model.saveAllPNG()
             case "wait":
-                // Until the document is loaded, encoded, and its overlay rendered.
-                for _ in 0..<600 {
+                // Until the viewer has its file and the whole list has been processed.
+                for _ in 0..<1200 {
                     try? await Task.sleep(for: .milliseconds(50))
-                    if model.activity == nil, model.result != nil || model.errorMessage != nil { break }
+                    let listSettled = model.items.allSatisfy { $0.phase != .waiting && $0.phase != .working }
+                    if model.activity == nil, listSettled, !model.items.isEmpty { break }
                 }
-                try? await Task.sleep(for: .milliseconds(400))
+                try? await Task.sleep(for: .milliseconds(700))
             case "sleep":
                 try? await Task.sleep(for: .milliseconds(Int((numbers.first ?? 0.5) * 1000)))
             case "size":
@@ -80,17 +90,6 @@ enum DebugAutomation {
                 if let pattern = numbers.first, let codebook = model.selectedCodebook {
                     model.select(pattern: Int(pattern), in: codebook.id)
                 }
-            case "export":
-                // Writes exactly what the save panel would, without the panel.
-                model.exportPixelVault()
-                if let request = model.exportRequest {
-                    try? request.document.data.write(to: directory.appendingPathComponent(value))
-                    model.exportRequest = nil
-                }
-            case "inspector":
-                model.showsInspector = value != "0"
-            case "dictionary":
-                model.showsDictionary = value != "0"
             case "snap":
                 try? await Task.sleep(for: .milliseconds(700))
                 await requestScreenshot(named: value)

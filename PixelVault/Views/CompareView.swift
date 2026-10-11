@@ -121,7 +121,7 @@ struct BlockOutlines: View {
 
     var body: some View {
         let showsGrid = model.overlay == .blocks || model.overlay == .patterns
-        let probes = model.hoverProbes
+        let probes = model.showsAdvanced ? model.hoverProbes : []
         let scale = frame.width / CGFloat(max(analysis.width, 1))
 
         Canvas { context, size in
@@ -287,7 +287,9 @@ struct CanvasChrome: View {
                     if hasLegend {
                         OverlayLegend()
                     }
-                    PointerReadout()
+                    if model.showsAdvanced {
+                        PointerReadout()
+                    }
                 }
                 Spacer(minLength: 10)
                 zoomControls

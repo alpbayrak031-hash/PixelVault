@@ -137,6 +137,52 @@ struct CodecTests {
         #expect(!PixelVault.isPixelVaultData(Data("PNG nope".utf8)))
     }
 
+    @Test("Reduced-size decoding returns the pyramid's own smaller renditions")
+    func previewDecoding() throws {
+        // Odd dimensions, so rounding of the reduced size is exercised too.
+        let image = TestImages.scene(width: 517, height: 389, alpha: true)
+        let data = try PixelVault.encode(image, quality: 80).data
+        let full = try PixelVault.decode(data).image
+
+        // Asking for more pixels than exist returns the full image.
+        #expect(try PixelVault.decodePreview(data, minimumLongSide: 10_000).pixels == full.pixels)
+
+        // The long side halves to 258, 129, then 64; each request is the most that size can satisfy.
+        for (request, divisor) in [(258, 2), (129, 4), (64, 8), (1, 8)] {
+            let preview = try PixelVault.decodePreview(data, minimumLongSide: request)
+            try #require(preview.width == (517 + divisor - 1) / divisor)
+            try #require(preview.height == (389 + divisor - 1) / divisor)
+            #expect(preview.hasAlpha)
+
+            // It should look like the full decode averaged down by the same factor.
+            var reference = [UInt8](repeating: 0, count: preview.pixels.count)
+            for y in 0..<preview.height {
+                for x in 0..<preview.width {
+                    for channel in 0..<4 {
+                        var sum = 0, count = 0
+                        for sourceY in (y * divisor)..<min((y + 1) * divisor, full.height) {
+                            for sourceX in (x * divisor)..<min((x + 1) * divisor, full.width) {
+                                sum += Int(full.pixels[(sourceY * full.width + sourceX) * 4 + channel])
+                                count += 1
+                            }
+                        }
+                        reference[(y * preview.width + x) * 4 + channel] = UInt8((sum + count / 2) / count)
+                    }
+                }
+            }
+            let averaged = RGBAImage(width: preview.width, height: preview.height, pixels: reference, hasAlpha: true)
+            #expect(ImageMetrics.psnr(preview, averaged) > 30, "1/\(divisor) preview should match the full decode")
+        }
+    }
+
+    @Test("Images without a pyramid still produce a preview")
+    func previewOfTinyImage() throws {
+        let image = TestImages.scene(width: 12, height: 9)
+        let data = try PixelVault.encode(image, quality: 60).data
+        let preview = try PixelVault.decodePreview(data, minimumLongSide: 4)
+        #expect(preview.width == 12 && preview.height == 9)
+    }
+
     @Test("Block-wise upsampling matches the plane upsampler bit for bit")
     func upsamplerConsistency() {
         var generator = SplitMix64(seed: 11)

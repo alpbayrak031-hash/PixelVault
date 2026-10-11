@@ -2,9 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+	  The app is not sandboxed: it saves each converted file beside its original, and a
+	  sandboxed app may only write where a save panel points it. The Quick Look extensions,
+	  which only read, stay sandboxed (Config/Extension.entitlements).
+	-->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<key>com.apple.security.files.user-selected.read-write</key>
-	<true/>
+	<false/>
 </dict>
 </plist>

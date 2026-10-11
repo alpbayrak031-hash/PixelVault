@@ -334,6 +334,20 @@ for ℓ = n − 1 down to 0:
 Pixels are sRGB. An encoder converts from the source's colour space and bakes in its
 orientation, so a `.pixv` carries no profile or orientation metadata.
 
+### 6.4 Reduced-size decoding (informative)
+
+Because every level only refines the one above it, a decoder can stop early and still have a
+complete picture. To get the image `2^k` times smaller (`1 ≤ k ≤ L`):
+
+- reconstruct luma and alpha only down to level `k` — skip the streams of levels `0 … k−1`;
+- reconstruct chroma only down to its level `k − 1`, and skip the extra `upsample` of step 2
+  above: the planes already match in size;
+- keep the top-left `ceil(width / 2^k) × ceil(height / 2^k)` samples.
+
+The skipped streams are length-prefixed, so they are never parsed. PixelVault's Finder
+thumbnails and Quick Look previews are produced this way: a 1/4-size rendition costs about a
+sixteenth of the work and memory of a full decode.
+
 ## 7. Validity
 
 A decoder must reject, without reading out of bounds or allocating without limit, a file that:

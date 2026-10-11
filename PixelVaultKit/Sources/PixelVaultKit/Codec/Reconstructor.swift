@@ -50,19 +50,23 @@ enum Reconstructor {
             stageBooks.append(books)
         }
 
+        let reduction = image.reduction
         let planes: [Plane] = Parallel.map(image.planes.count) { index in
             let plane = reconstruct(image.planes[index], books: stageBooks[index])
             // Chroma is coded at half resolution; bring it back up with the pyramid's own filter.
-            return image.planes[index].kind.isChroma ? Pyramid.upsample(plane) : plane
+            // At reduced size it stopped one level later than luma and already matches it.
+            return image.planes[index].kind.isChroma && reduction == 0 ? Pyramid.upsample(plane) : plane
         }
 
         func plane(_ kind: PIXVPlaneKind) -> Plane? {
             image.planes.firstIndex { $0.kind == kind }.map { planes[$0] }
         }
         guard let luma = plane(.luma) else { throw PIXVError.corrupt("missing luma plane") }
-        precondition(luma.width == geometry.paddedWidth && luma.height == geometry.paddedHeight)
+        precondition(luma.width == geometry.paddedWidth >> reduction && luma.height == geometry.paddedHeight >> reduction)
 
+        let rounding = (1 << reduction) - 1
         return ColorTransform.inverse(luma: luma, chromaBlue: plane(.chromaBlue), chromaRed: plane(.chromaRed),
-                                      alpha: plane(.alpha), width: image.width, height: image.height)
+                                      alpha: plane(.alpha), width: (image.width + rounding) >> reduction,
+                                      height: (image.height + rounding) >> reduction)
     }
 }

@@ -81,6 +81,23 @@ public enum PixelVault {
         return PIXVDecodeResult(image: image, analysis: analysis, timings: timings)
     }
 
+    /// Decodes a smaller rendition of a `.pixv` file for thumbnails and previews.
+    ///
+    /// The format is a resolution pyramid, so stopping early yields the image at 1/2, 1/4 or
+    /// 1/8 size while skipping most of the decoding work and memory. The result is the
+    /// smallest of those whose longer side is still at least `minimumLongSide` pixels, or the
+    /// full image when none is.
+    public static func decodePreview(_ data: Data, minimumLongSide: Int) throws -> RGBAImage {
+        let bytes = [UInt8](data)
+        let header = try Container.readHeader(bytes)
+        let longSide = max(header.width, header.height)
+        var reduction = 0
+        while reduction < header.lumaLevels, longSide >> (reduction + 1) >= minimumLongSide {
+            reduction += 1
+        }
+        return try Reconstructor.render(try Container.read(bytes, reduction: reduction).image)
+    }
+
     /// True when `data` starts with the `.pixv` signature.
     public static func isPixelVaultData(_ data: Data) -> Bool {
         data.count >= PIXVFormat.magic.count && data.prefix(PIXVFormat.magic.count).elementsEqual(PIXVFormat.magic)

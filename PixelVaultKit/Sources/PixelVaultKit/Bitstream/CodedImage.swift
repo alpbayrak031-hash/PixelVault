@@ -54,7 +54,8 @@ struct CodedPlane: Sendable {
     var codebookIDs: [Int]
     /// Quantised base-layer samples.
     var base: Plane
-    /// Pattern-coded levels; index 0 is full plane resolution.
+    /// Pattern-coded levels, finest first. Index 0 is full plane resolution unless the file
+    /// was read at reduced size, in which case the finest levels are simply absent.
     var levels: [LevelCoding]
 
     var gainStep: Float { Float(gainStepHalves) / 2 }
@@ -72,6 +73,9 @@ struct CodedImage: Sendable {
     var quality: Int
     var codebooks: [CodedCodebook]
     var planes: [CodedPlane]
+    /// Number of halvings applied when the file was read: the planes stop this many pyramid
+    /// levels short of full size. Always 0 for an image that is about to be written.
+    var reduction = 0
 
     var geometry: PIXVGeometry {
         PIXVGeometry(width: width, height: height, lumaLevels: lumaLevels)
