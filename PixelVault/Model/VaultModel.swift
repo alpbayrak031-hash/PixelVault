@@ -57,13 +57,22 @@ final class VaultModel {
 
     private(set) var items: [ConversionItem] = []
 
-    /// The item shown in the viewer.
-    var focusedID: ConversionItem.ID? {
+    /// The files highlighted in the list — what Convert acts on.
+    var selection: Set<ConversionItem.ID> = [] {
+        didSet { if selection != oldValue { selectionChanged() } }
+    }
+
+    /// The selected item shown in the viewer.
+    private(set) var focusedID: ConversionItem.ID? {
         didSet { if focusedID != oldValue { focusChanged() } }
     }
 
     var focusedItem: ConversionItem? {
         items.first { $0.id == focusedID }
+    }
+
+    var selectedItems: [ConversionItem] {
+        items.filter { selection.contains($0.id) }
     }
 
     // MARK: The viewer
@@ -76,10 +85,9 @@ final class VaultModel {
 
     // MARK: Controls
 
-    /// Applies to every photo in the list. The focused photo follows it live; the rest are
-    /// re-converted once it stops changing.
+    /// The quality Convert uses. The photo in the viewer follows it live, as a preview.
     var quality = Double(PixelVault.defaultQuality) {
-        didSet { if Int(quality.rounded()) != Int(oldValue.rounded()) { qualityChanged() } }
+        didSet { if Int(quality.rounded()) != Int(oldValue.rounded()) { pump() } }
     }
 
     var viewMode = ViewMode.split
@@ -145,17 +153,10 @@ final class VaultModel {
         selectedCodebook?.role == .chroma && overlay == .patterns ? .chromaBlue : .luma
     }
 
-    /// `.pixv` files in the list that have not been written out as PNG.
-    var pixelVaultItemsWithoutPNG: [ConversionItem] {
-        items.filter { $0.kind == .pixv && $0.fileURL != nil && $0.outputURL == nil && !$0.wantsPNG && $0.phase == .done }
-    }
-
     /// Totals over the photos converted so far.
-    var conversionTotals: (count: Int, of: Int, failed: Int, sourceBytes: Int, outputBytes: Int) {
-        let photos = items.filter { $0.kind == .image }
-        let finished = photos.filter { $0.outputSize != nil && $0.sourceSize != nil && $0.phase == .done }
-        let failed = photos.filter { if case .failed = $0.phase { true } else { false } }
-        return (finished.count, photos.count, failed.count, finished.reduce(0) { $0 + ($1.sourceSize ?? 0) },
+    var conversionTotals: (count: Int, sourceBytes: Int, outputBytes: Int) {
+        let finished = items.filter { $0.kind == .image && $0.phase == .done && $0.outputSize != nil && $0.sourceSize != nil }
+        return (finished.count, finished.reduce(0) { $0 + ($1.sourceSize ?? 0) },
                 finished.reduce(0) { $0 + ($1.outputSize ?? 0) })
     }
 
@@ -167,63 +168,65 @@ final class VaultModel {
 
     // MARK: Adding and removing
 
-    /// Adds files and the contents of folders to the list. Photos start converting at once.
-    func add(_ urls: [URL], focus: Bool = false) {
+    /// Adds files and the contents of folders to the list and selects them, ready to convert.
+    func add(_ urls: [URL]) {
         Task {
             let files = await Task.detached(priority: .userInitiated) { Pipeline.convertibleFiles(in: urls) }.value
             guard !files.isEmpty else {
                 if !urls.isEmpty { errorMessage = "PixelVault can't read \(urls.count == 1 ? "that file" : "any of those files")." }
                 return
             }
-            var target: ConversionItem?
+            var added: Set<ConversionItem.ID> = []
             for file in files.map(\.standardizedFileURL) {
                 if let existing = items.first(where: { $0.fileURL == file }) {
-                    target = target ?? existing
+                    added.insert(existing.id)
                 } else {
                     let item = ConversionItem(origin: .file(file))
                     items.append(item)
-                    target = target ?? item
+                    added.insert(item.id)
                 }
             }
-            if focus || focusedID == nil, let target { focusedID = target.id }
+            selection = added
             loadThumbnails()
-            pump()
         }
     }
 
-    /// Adds image data that has no file behind it; it can be viewed and exported, not saved in place.
+    /// Adds image data that has no file behind it; it can be viewed and exported, not converted in place.
     func add(data: Data, name: String) {
         let item = ConversionItem(origin: .data(data, name: name))
         items.append(item)
-        focusedID = item.id
+        selection = [item.id]
         loadThumbnails()
     }
 
     func addSample() {
         if let existing = items.first(where: { if case .sample = $0.origin { true } else { false } }) {
-            focusedID = existing.id
+            selection = [existing.id]
         } else {
             let item = ConversionItem(origin: .sample)
             items.append(item)
-            focusedID = item.id
+            selection = [item.id]
         }
     }
 
-    func remove(_ item: ConversionItem) {
-        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
-        items.remove(at: index)
-        if focusedID == item.id {
-            focusedID = items.isEmpty ? nil : items[min(index, items.count - 1)].id
+    func remove(_ ids: Set<ConversionItem.ID>) {
+        guard let firstIndex = items.firstIndex(where: { ids.contains($0.id) }) else { return }
+        items.removeAll { ids.contains($0.id) }
+        // Keep something on show: the item that slid into the first removed slot.
+        if selection.isSubset(of: ids) {
+            selection = items.isEmpty ? [] : [items[min(firstIndex, items.count - 1)].id]
+        } else {
+            selection.subtract(ids)
         }
     }
 
-    func removeFocused() {
-        if let item = focusedItem { remove(item) }
+    func removeSelected() {
+        remove(selection)
     }
 
     func clearList() {
         items.removeAll()
-        focusedID = nil
+        selection = []
     }
 
     func reveal(_ item: ConversionItem) {
@@ -232,16 +235,36 @@ final class VaultModel {
         }
     }
 
-    /// Asks for a `.pixv` in the list to be written back out as a PNG beside it.
-    func savePNG(_ item: ConversionItem) {
-        guard item.kind == .pixv, item.fileURL != nil else { return }
-        item.wantsPNG = true
-        item.phase = .waiting
-        pump()
+    // MARK: Converting
+
+    /// True when Convert has something to write for this item: a photo not yet converted at
+    /// the current quality, or a `.pixv` not yet written out as PNG.
+    func canConvert(_ item: ConversionItem) -> Bool {
+        guard item.savesBesideOriginal, !item.isBusy else { return false }
+        switch item.kind {
+        case .image: return item.outputURL == nil || item.outputQuality != Int(quality.rounded())
+        case .pixv: return item.outputURL == nil
+        }
     }
 
-    func saveAllPNG() {
-        pixelVaultItemsWithoutPNG.forEach(savePNG)
+    /// The selected files Convert would act on.
+    var convertibleSelection: [ConversionItem] {
+        selectedItems.filter(canConvert)
+    }
+
+    /// Converts every selected file and saves the result beside it: photos become `.pixv`
+    /// at the current quality, `.pixv` files become PNG.
+    func convertSelected() {
+        convert(Set(convertibleSelection.map(\.id)))
+    }
+
+    func convert(_ ids: Set<ConversionItem.ID>) {
+        let quality = Int(quality.rounded())
+        for item in items where ids.contains(item.id) && canConvert(item) {
+            item.queuedQuality = quality
+            item.phase = .waiting
+        }
+        pump()
     }
 
     // MARK: Work scheduling
@@ -250,11 +273,15 @@ final class VaultModel {
     /// Bumped whenever the focus moves, so results for an item no longer on show are not displayed.
     private var focusGeneration = 0
     private var isFocusLoaded = false
-    /// The quality the list is being converted at; trails `quality` while the slider moves.
-    private var committedQuality = PixelVault.defaultQuality
-    private var settleTask: Task<Void, Never>?
     /// A live quality that failed to encode, so it is not retried in a loop.
     private var failedLiveQuality: Int?
+
+    /// Keeps the viewer on a selected item: the one already on show if it is still selected,
+    /// otherwise the first selected in list order.
+    private func selectionChanged() {
+        if let focusedID, selection.contains(focusedID) { return }
+        focusedID = items.first { selection.contains($0.id) }?.id
+    }
 
     private func focusChanged() {
         focusGeneration += 1
@@ -272,27 +299,8 @@ final class VaultModel {
         pump()
     }
 
-    private func qualityChanged() {
-        settleTask?.cancel()
-        settleTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(450))
-            guard !Task.isCancelled, let self else { return }
-            self.committedQuality = Int(self.quality.rounded())
-            for item in self.items where self.needsConversion(item) && item.phase != .working {
-                item.phase = .waiting
-            }
-            self.pump()
-        }
-        pump()
-    }
-
-    /// True for a photo in the list whose file on disk is not at the committed quality.
-    private func needsConversion(_ item: ConversionItem) -> Bool {
-        item.kind == .image && item.savesBesideOriginal && item.attemptedQuality != committedQuality
-    }
-
     /// Starts the most urgent job, if nothing is running. What the user is looking at comes
-    /// first; the rest of the list follows in order.
+    /// first; queued conversions follow in list order.
     private func pump() {
         guard !isBusy else { return }
         let liveQuality = Int(quality.rounded())
@@ -301,20 +309,13 @@ final class VaultModel {
             if !isFocusLoaded {
                 return startViewing(item, quality: liveQuality)
             }
-            if item.kind == .image, let source, let result {
-                if result.quality != liveQuality, failedLiveQuality != liveQuality {
-                    return startReencoding(item, source: source, quality: liveQuality)
-                }
-                if result.quality == committedQuality, needsConversion(item) {
-                    return startSaving(item, data: result.data, quality: committedQuality)
-                }
+            if item.kind == .image, let source, let result,
+               result.quality != liveQuality, failedLiveQuality != liveQuality {
+                return startReencoding(source: source, quality: liveQuality)
             }
         }
-        if let item = items.first(where: \.wantsPNG) {
-            return startPNGExport(item)
-        }
-        if let item = items.first(where: { $0.id != focusedID && needsConversion($0) }) {
-            return startConverting(item, quality: committedQuality)
+        if let item = items.first(where: { $0.phase == .waiting }) {
+            return startConverting(item)
         }
     }
 
@@ -330,42 +331,20 @@ final class VaultModel {
         }
     }
 
-    private func record(_ saved: Result<SavedFile, Pipeline.SaveError>?, for item: ConversionItem, quality: Int) {
-        guard let saved else { return }
-        item.attemptedQuality = quality
-        switch saved {
-        case .success(let file):
-            item.outputURL = file.url
-            item.outputSize = file.size
-            item.outputQuality = quality
-            item.phase = .done
-        case .failure(let error):
-            item.phase = .failed(error.localizedDescription)
-        }
-    }
-
     // MARK: Jobs
 
     private func startViewing(_ item: ConversionItem, quality: Int) {
         let generation = focusGeneration
         let origin = item.origin
-        let save = needsConversion(item) && quality == committedQuality
-        let existing = item.outputURL
-        if item.kind == .image, item.outputURL == nil { item.phase = .working }
 
         run {
-            try Pipeline.view(origin, quality: quality, save: save, replacing: existing)
+            try Pipeline.view(origin, quality: quality)
         } completion: { [self] outcome in
             switch outcome {
-            case .success(.image(let source, let compressed, let saved)):
+            case .success(.image(let source, let compressed)):
                 item.formatName = source.formatName
                 item.sourceSize = source.fileSize ?? item.sourceSize
                 if item.thumbnail == nil { item.thumbnail = Pipeline.thumbnail(of: source.cgImage) }
-                record(saved, for: item, quality: quality)
-                if !item.savesBesideOriginal {
-                    item.outputSize = compressed.data.count
-                    item.phase = .done
-                }
                 if generation == focusGeneration {
                     self.source = source
                     adopt(compressed)
@@ -378,7 +357,6 @@ final class VaultModel {
                 }
             case .failure(let error):
                 item.phase = .failed(error.localizedDescription)
-                item.attemptedQuality = quality
             }
             if generation == focusGeneration {
                 isFocusLoaded = true
@@ -387,82 +365,61 @@ final class VaultModel {
         }
     }
 
-    /// Re-encodes the photo already in the viewer — what makes the quality slider live.
-    private func startReencoding(_ item: ConversionItem, source: SourceImage, quality: Int) {
+    /// Re-encodes the photo already in the viewer — what makes the quality control live.
+    private func startReencoding(source: SourceImage, quality: Int) {
         let generation = focusGeneration
-        let save = needsConversion(item) && quality == committedQuality
-        let url = item.fileURL
-        let existing = item.outputURL
-
         run {
-            let compressed = try Pipeline.compress(source.image, quality: quality)
-            let saved = save ? url.map {
-                Pipeline.write(compressed.data, beside: $0, pathExtension: PixelVault.fileExtension, replacing: existing)
-            } : nil
-            return (compressed, saved)
+            try Pipeline.compress(source.image, quality: quality)
         } completion: { [self] outcome in
+            guard generation == focusGeneration else { return }
             switch outcome {
-            case .success(let (compressed, saved)):
-                record(saved, for: item, quality: quality)
-                if !item.savesBesideOriginal { item.outputSize = compressed.data.count }
-                if generation == focusGeneration { adopt(compressed) }
+            case .success(let compressed):
+                adopt(compressed)
             case .failure(let error):
-                if generation == focusGeneration {
-                    failedLiveQuality = quality
-                    errorMessage = error.localizedDescription
+                failedLiveQuality = quality
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func startConverting(_ item: ConversionItem) {
+        guard let url = item.fileURL else {
+            item.phase = .idle
+            return pump()
+        }
+        let existing = item.outputURL
+        let quality = item.queuedQuality
+        item.phase = .working
+
+        switch item.kind {
+        case .image:
+            run {
+                try Pipeline.convert(url, quality: quality, replacing: existing)
+            } completion: { outcome in
+                switch outcome {
+                case .success(let converted):
+                    item.formatName = converted.formatName
+                    item.sourceSize = converted.sourceSize
+                    item.outputURL = converted.saved.url
+                    item.outputSize = converted.saved.size
+                    item.outputQuality = quality
+                    item.phase = .done
+                case .failure(let error):
+                    item.phase = .failed(error.localizedDescription)
                 }
             }
-        }
-    }
-
-    /// Writes the encode already on show, once the quality has settled on it.
-    private func startSaving(_ item: ConversionItem, data: Data, quality: Int) {
-        guard let url = item.fileURL else { return }
-        let existing = item.outputURL
-        run {
-            Pipeline.write(data, beside: url, pathExtension: PixelVault.fileExtension, replacing: existing)
-        } completion: { [self] outcome in
-            if case .success(let saved) = outcome { record(saved, for: item, quality: quality) }
-        }
-    }
-
-    private func startConverting(_ item: ConversionItem, quality: Int) {
-        guard let url = item.fileURL else { return }
-        let existing = item.outputURL
-        item.phase = .working
-        run {
-            try Pipeline.convert(url, quality: quality, replacing: existing)
-        } completion: { [self] outcome in
-            switch outcome {
-            case .success(let converted):
-                item.formatName = converted.formatName
-                item.sourceSize = converted.sourceSize
-                record(.success(converted.saved), for: item, quality: quality)
-            case .failure(let error):
-                item.attemptedQuality = quality
-                item.phase = .failed(error.localizedDescription)
-            }
-        }
-    }
-
-    private func startPNGExport(_ item: ConversionItem) {
-        guard let url = item.fileURL else {
-            item.wantsPNG = false
-            return
-        }
-        item.wantsPNG = false
-        item.phase = .working
-        let existing = item.outputURL
-        run {
-            try Pipeline.exportPNG(fromPixelVaultAt: url, replacing: existing)
-        } completion: { outcome in
-            switch outcome {
-            case .success(let file):
-                item.outputURL = file.url
-                item.outputSize = file.size
-                item.phase = .done
-            case .failure(let error):
-                item.phase = .failed(error.localizedDescription)
+        case .pixv:
+            run {
+                try Pipeline.exportPNG(fromPixelVaultAt: url, replacing: existing)
+            } completion: { outcome in
+                switch outcome {
+                case .success(let file):
+                    item.outputURL = file.url
+                    item.outputSize = file.size
+                    item.phase = .done
+                case .failure(let error):
+                    item.phase = .failed(error.localizedDescription)
+                }
             }
         }
     }

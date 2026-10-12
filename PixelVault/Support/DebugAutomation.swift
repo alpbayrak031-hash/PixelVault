@@ -5,7 +5,7 @@ import SwiftUI
 /// Scripted UI driving for debug builds, used to capture the window in known states.
 ///
 /// Set `PIXELVAULT_AUTOMATION` to a `;`-separated script, for example
-/// `sample;wait;advanced=1;overlay=blocks;zoom=6;snap=blocks;quit`. Screenshot requests are
+/// `add=/path/Folder;wait;select=all;convert;wait;snap=done;quit`. Screenshot requests are
 /// exchanged through `PixelVaultAutomation/` in the temporary directory.
 @MainActor
 enum DebugAutomation {
@@ -34,22 +34,25 @@ enum DebugAutomation {
                 let urls = value.split(separator: ",").map { path -> URL in
                     path.hasPrefix("/") ? URL(fileURLWithPath: String(path)) : directory.appendingPathComponent(String(path))
                 }
-                model.add(urls, focus: true)
+                model.add(urls)
             case "sample":
                 model.addSample()
-            case "focus":
-                if let index = numbers.first.map(Int.init), model.items.indices.contains(index) {
-                    model.focusedID = model.items[index].id
+            case "select":
+                // `all`, or comma-separated row numbers.
+                if value == "all" {
+                    model.selection = Set(model.items.map(\.id))
+                } else {
+                    model.selection = Set(numbers.map(Int.init).filter(model.items.indices.contains).map { model.items[$0].id })
                 }
+            case "convert":
+                model.convertSelected()
             case "advanced":
                 model.showsAdvanced = value != "0"
-            case "savepng":
-                model.saveAllPNG()
             case "wait":
                 // Until the viewer has its file and the whole list has been processed.
                 for _ in 0..<1200 {
                     try? await Task.sleep(for: .milliseconds(50))
-                    let listSettled = model.items.allSatisfy { $0.phase != .waiting && $0.phase != .working }
+                    let listSettled = !model.items.contains(where: \.isBusy)
                     if model.activity == nil, listSettled, !model.items.isEmpty { break }
                 }
                 try? await Task.sleep(for: .milliseconds(700))

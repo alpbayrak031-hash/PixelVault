@@ -37,7 +37,7 @@ struct ContentView: View {
         .fileImporter(isPresented: $model.isImporterPresented, allowedContentTypes: [.image, .pixv, .folder],
                       allowsMultipleSelection: true) { outcome in
             switch outcome {
-            case .success(let urls): model.add(urls, focus: true)
+            case .success(let urls): model.add(urls)
             case .failure(let error): model.errorMessage = error.localizedDescription
             }
         }
@@ -60,13 +60,16 @@ struct ContentView: View {
                 Theme.canvas
                 if model.items.isEmpty {
                     WelcomeView()
+                } else if model.focusedItem == nil {
+                    ContentUnavailableView("No File Selected", systemImage: "photo.on.rectangle.angled",
+                                           description: Text("Select files in the list, then press Convert."))
                 } else if let failure = model.focusedFailure {
                     ContentUnavailableView {
                         Label("Can't Open “\(model.documentName)”", systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(failure)
                     } actions: {
-                        Button("Remove from List") { model.removeFocused() }
+                        Button("Remove from List") { model.removeSelected() }
                     }
                 } else {
                     CompareView()
@@ -161,6 +164,8 @@ struct ContentView: View {
             .disabled(model.result == nil)
             .help("Save a copy somewhere else")
 
+            ConvertButton()
+
             Toggle(isOn: $model.showsAdvanced) {
                 Label("Advanced", systemImage: "slider.horizontal.3")
                     .labelStyle(.titleAndIcon)
@@ -173,29 +178,83 @@ struct ContentView: View {
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         let model = model
-        var accepted = false
+        let fileProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
 
-        for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+        if !fileProviders.isEmpty {
+            // Gather every dropped file before adding, so the whole drop ends up selected together.
+            let group = DispatchGroup()
+            let gathered = DroppedURLs()
+            for provider in fileProviders {
+                group.enter()
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url else { return }
-                    Task { @MainActor in model.add([url]) }
+                    if let url { gathered.append(url) }
+                    group.leave()
                 }
-                accepted = true
-                continue
             }
-            // Images dragged out of other apps arrive as data rather than files.
+            group.notify(queue: .main) {
+                let urls = gathered.urls
+                Task { @MainActor in model.add(urls) }
+            }
+            return true
+        }
+
+        // Images dragged out of other apps arrive as data rather than files.
+        for provider in providers {
             for type in [UTType.pixv, .image] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
                 let name = provider.suggestedName ?? "Dropped Image"
                 _ = provider.loadDataRepresentation(for: type) { data, _ in
                     guard let data else { return }
                     Task { @MainActor in model.add(data: data, name: name) }
                 }
-                accepted = true
-                break
+                return true
             }
         }
-        return accepted
+        return false
+    }
+}
+
+/// Collects file URLs delivered on arbitrary queues by a drop's item providers.
+private final class DroppedURLs: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [URL] = []
+
+    func append(_ url: URL) {
+        lock.withLock { storage.append(url) }
+    }
+
+    var urls: [URL] {
+        lock.withLock { storage }
+    }
+}
+
+/// Converts every selected file and saves each result in that file's own folder.
+struct ConvertButton: View {
+    @Environment(VaultModel.self) private var model
+
+    var body: some View {
+        let targets = model.convertibleSelection
+
+        Button {
+            model.convertSelected()
+        } label: {
+            Label(targets.count > 1 ? "Convert \(targets.count)" : "Convert", systemImage: "arrow.triangle.2.circlepath")
+                .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(targets.isEmpty)
+        .keyboardShortcut(.return, modifiers: .command)
+        .help(help(for: targets))
+    }
+
+    private func help(for targets: [ConversionItem]) -> String {
+        if !targets.isEmpty {
+            return "Convert the selected \(targets.count == 1 ? "file" : "files") and save beside the \(targets.count == 1 ? "original" : "originals") (⌘↩)"
+        }
+        let selected = model.selectedItems
+        if selected.isEmpty { return "Select files in the list to convert them" }
+        if selected.contains(where: \.isBusy) { return "Converting…" }
+        if selected.allSatisfy({ !$0.savesBesideOriginal }) { return "This item has no original file to save beside — use Export" }
+        return "Already converted at this quality"
     }
 }
 
@@ -235,7 +294,7 @@ struct WelcomeView: View {
             VStack(spacing: 8) {
                 Text("Drop photos to convert them")
                     .font(.system(size: 26, weight: .semibold, design: .rounded))
-                Text("Each photo becomes a small .pixv file, saved right beside the original.\nDrop as many as you like — or whole folders. Drop .pixv files to view them or turn them back into PNGs.")
+                Text("Add as many photos as you like — or whole folders — then press Convert.\nEach becomes a small .pixv file saved right beside the original. .pixv files convert back to PNG the same way.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

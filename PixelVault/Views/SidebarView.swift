@@ -1,36 +1,43 @@
 import PixelVaultKit
 import SwiftUI
 
-/// The conversion list: every file added this session, with what became of it.
+/// The conversion list: every file added this session, with what became of it. The rows
+/// selected here are what the Convert button acts on.
 struct SidebarView: View {
     @Environment(VaultModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
 
-        List(selection: $model.focusedID) {
+        List(selection: $model.selection) {
             ForEach(model.items) { item in
                 ItemRow(item: item)
                     .tag(item.id)
-                    .contextMenu { menu(for: item) }
             }
+        }
+        .contextMenu(forSelectionType: ConversionItem.ID.self) { ids in
+            menu(for: ids)
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
-        .onDeleteCommand { model.removeFocused() }
+        .onDeleteCommand { model.removeSelected() }
         .safeAreaInset(edge: .bottom, spacing: 0) { SidebarFooter() }
         .background(Theme.panel)
     }
 
     @ViewBuilder
-    private func menu(for item: ConversionItem) -> some View {
-        Button("Show in Finder") { model.reveal(item) }
-            .disabled(item.outputURL == nil && item.fileURL == nil)
-        if item.kind == .pixv, item.fileURL != nil {
-            Button(item.outputURL == nil ? "Save as PNG" : "Save as PNG Again") { model.savePNG(item) }
+    private func menu(for ids: Set<ConversionItem.ID>) -> some View {
+        let targets = model.items.filter { ids.contains($0.id) }
+        if !targets.isEmpty {
+            Button(targets.count == 1 ? "Convert" : "Convert \(targets.count) Files") { model.convert(ids) }
+                .disabled(!targets.contains(where: model.canConvert))
+            if targets.count == 1, let item = targets.first {
+                Button("Show in Finder") { model.reveal(item) }
+                    .disabled(item.outputURL == nil && item.fileURL == nil)
+            }
+            Divider()
+            Button("Remove from List") { model.remove(ids) }
         }
-        Divider()
-        Button("Remove from List") { model.remove(item) }
     }
 }
 
@@ -77,6 +84,8 @@ struct ItemRow: View {
     @ViewBuilder
     private var accessory: some View {
         switch item.phase {
+        case .idle:
+            EmptyView()
         case .waiting:
             Image(systemName: "clock")
                 .foregroundStyle(.tertiary)
@@ -94,7 +103,7 @@ struct ItemRow: View {
                     .padding(.vertical, 2)
                     .background(Theme.accent.opacity(0.22), in: Capsule())
                     .foregroundStyle(Theme.accent)
-            } else if item.kind == .pixv, item.outputURL != nil {
+            } else {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             }
@@ -108,42 +117,39 @@ struct ItemRow: View {
 
     private var detail: String {
         let original = item.sourceSize.map(Format.bytes) ?? ""
+        let source = original.isEmpty ? item.formatName : "\(item.formatName) · \(original)"
         switch item.phase {
         case .failed(let message):
             return message
+        case .idle:
+            return source
         case .waiting:
-            return item.kind == .pixv ? "Waiting to save PNG…" : "\(item.formatName) · \(original) · waiting"
+            return "Waiting…"
         case .working:
-            return item.kind == .pixv ? "Saving PNG…" : "Converting…"
+            return "Converting to \(item.outputFormatName)…"
         case .done:
+            guard let size = item.outputSize else { return source }
             switch item.kind {
-            case .image:
-                guard let size = item.outputSize else { return "\(item.formatName) · \(original)" }
-                return original.isEmpty ? ".pixv · \(Format.bytes(size))" : "\(original) → \(Format.bytes(size))"
-            case .pixv:
-                if let size = item.outputSize { return "\(original) → PNG \(Format.bytes(size))" }
-                return ".pixv · \(original)"
+            case .image: return "\(original) → \(Format.bytes(size))"
+            case .pixv: return "\(original) → PNG \(Format.bytes(size))"
             }
         }
     }
 
     private var tooltip: String {
         if let output = item.outputURL { return "Saved as \(output.lastPathComponent) beside the original" }
-        if item.kind == .image, !item.savesBesideOriginal { return "No original file to save beside — use Export" }
+        if !item.savesBesideOriginal { return "No original file to save beside — use Export" }
         return item.fileURL?.path ?? item.name
     }
 }
 
-/// Quality for the whole list, the one-click PNG export, and a running total.
+/// The quality Convert uses, and a running total of what it has saved.
 struct SidebarFooter: View {
     @Environment(VaultModel.self) private var model
 
     var body: some View {
-        let totals = model.conversionTotals
-        let unsaved = model.pixelVaultItemsWithoutPNG
-
         VStack(alignment: .leading, spacing: 10) {
-            if totals.of > 0 {
+            if model.items.contains(where: { $0.kind == .image }) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Quality")
                         .font(.caption.weight(.semibold))
@@ -155,27 +161,15 @@ struct SidebarFooter: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .help("Applies to every photo in the list. Smaller files keep less fine detail.")
+                    .help("Used when photos are converted. Smaller files keep less fine detail.")
                 }
             }
 
-            if !unsaved.isEmpty {
-                Button {
-                    model.saveAllPNG()
-                } label: {
-                    Label(unsaved.count == 1 ? "Save as PNG" : "Save \(unsaved.count) as PNG", systemImage: "square.and.arrow.down")
-                        .frame(maxWidth: .infinity)
-                }
-                .help("Decode the .pixv files in the list and save each PNG beside its .pixv")
-            }
-
-            if totals.of > 0 {
-                Text(summary(totals))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -193,13 +187,13 @@ struct SidebarFooter: View {
         }
     }
 
-    private func summary(_ totals: (count: Int, of: Int, failed: Int, sourceBytes: Int, outputBytes: Int)) -> String {
-        var progress = totals.count + totals.failed == totals.of
-            ? "\(totals.count) \(totals.count == 1 ? "photo" : "photos") converted"
-            : "\(totals.count) of \(totals.of - totals.failed) photos converted"
-        if totals.failed > 0 { progress += ", \(totals.failed) couldn't be" }
-        guard totals.outputBytes > 0, totals.sourceBytes > 0 else { return progress }
-        return "\(progress)\n\(Format.bytes(totals.sourceBytes)) → \(Format.bytes(totals.outputBytes)), "
+    private var summary: String {
+        let totals = model.conversionTotals
+        guard totals.count > 0, totals.outputBytes > 0 else {
+            return "Select files and press Convert. Each result is saved beside its original."
+        }
+        return "\(totals.count) \(totals.count == 1 ? "photo" : "photos") converted: "
+            + "\(Format.bytes(totals.sourceBytes)) → \(Format.bytes(totals.outputBytes)), "
             + "\(Format.ratio(Double(totals.sourceBytes) / Double(totals.outputBytes))) smaller. Saved beside the originals."
     }
 }

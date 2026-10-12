@@ -11,7 +11,7 @@ struct PixelVaultApp: App {
                 .preferredColorScheme(.dark)
                 .frame(minWidth: 900, minHeight: 600)
                 // Files opened from Finder — double-clicked .pixv files included — land here.
-                .onOpenURL { model.add([$0], focus: true) }
+                .onOpenURL { model.add([$0]) }
                 #if DEBUG
                 .task { DebugAutomation.start(model: model) }
                 #endif
@@ -37,15 +37,16 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(model.focusedItem?.fileURL == nil)
-            Button("Remove from List") { model.removeFocused() }
+            Button("Remove from List") { model.removeSelected() }
                 .keyboardShortcut(.delete)
-                .disabled(model.focusedItem == nil)
+                .disabled(model.selection.isEmpty)
             Button("Clear List") { model.clearList() }
                 .disabled(model.items.isEmpty)
         }
         CommandGroup(replacing: .saveItem) {
-            Button("Save All .pixv Files as PNG") { model.saveAllPNG() }
-                .disabled(model.pixelVaultItemsWithoutPNG.isEmpty)
+            // ⌘↩ lives on the toolbar's Convert button, which this mirrors.
+            Button("Convert Selected Files") { model.convertSelected() }
+                .disabled(model.convertibleSelection.isEmpty)
             Divider()
             Button("Export as PixelVault Image…") { model.exportPixelVault() }
                 .keyboardShortcut("s", modifiers: [.command, .shift])

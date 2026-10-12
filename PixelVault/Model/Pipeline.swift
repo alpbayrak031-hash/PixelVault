@@ -49,7 +49,7 @@ struct SavedFile: Sendable {
 enum Pipeline {
     /// An item opened for the viewer.
     enum Viewed: Sendable {
-        case image(SourceImage, CompressionResult, saved: Result<SavedFile, SaveError>?)
+        case image(SourceImage, CompressionResult)
         case pixv(CompressionResult)
     }
 
@@ -78,9 +78,9 @@ enum Pipeline {
 
     // MARK: Viewing
 
-    /// Loads an item for the viewer. Photos are compressed at `quality`, and — when `save`
-    /// is set and the item has a file — the `.pixv` is written beside the original.
-    static func view(_ origin: ConversionItem.Origin, quality: Int, save: Bool, replacing existing: URL?) throws -> Viewed {
+    /// Loads an item for the viewer. Photos are compressed at `quality` in memory, as a
+    /// preview of what Convert would write; nothing touches the disk.
+    static func view(_ origin: ConversionItem.Origin, quality: Int) throws -> Viewed {
         let source: SourceImage
         switch origin {
         case .sample:
@@ -89,19 +89,12 @@ enum Pipeline {
             source = try sourceImage(from: data, name: name, fileSize: nil)
         case .file(let url):
             let data = try Data(contentsOf: url, options: .mappedIfSafe)
-            let name = url.deletingPathExtension().lastPathComponent
             if PixelVault.isPixelVaultData(data) {
                 return .pixv(try result(decoding: data, original: nil, encodeTimings: nil))
             }
-            source = try sourceImage(from: data, name: name, fileSize: data.count)
+            source = try sourceImage(from: data, name: url.deletingPathExtension().lastPathComponent, fileSize: data.count)
         }
-
-        let compressed = try compress(source.image, quality: quality)
-        var saved: Result<SavedFile, SaveError>?
-        if save, case .file(let url) = origin {
-            saved = write(compressed.data, beside: url, pathExtension: PixelVault.fileExtension, replacing: existing)
-        }
-        return .image(source, compressed, saved: saved)
+        return .image(source, try compress(source.image, quality: quality))
     }
 
     /// Encodes, then decodes the bytes just produced. Decoding the real file — rather than

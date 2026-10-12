@@ -20,10 +20,12 @@ final class ConversionItem: Identifiable {
     }
 
     enum Phase: Equatable {
-        /// Queued for conversion.
+        /// In the list, nothing written yet (or nothing asked for since the last result).
+        case idle
+        /// Queued by Convert.
         case waiting
         case working
-        /// Converted, or — for a `.pixv` that is only being viewed — nothing to do.
+        /// The converted file has been written beside the original.
         case done
         case failed(String)
     }
@@ -45,20 +47,19 @@ final class ConversionItem: Identifiable {
     /// The converted file written beside the original.
     var outputURL: URL?
     var outputSize: Int?
-    /// Quality the file at `outputURL` was encoded with.
+    /// Quality the file at `outputURL` was encoded with (photos only).
     var outputQuality: Int?
-    /// Quality of the most recent conversion attempt, successful or not.
-    var attemptedQuality: Int?
-    /// Set when the user asks for a `.pixv` to be written back out as a PNG.
-    var wantsPNG = false
+    /// Quality to convert at, set when Convert queues the item.
+    var queuedQuality = 0
 
     init(origin: Origin) {
         self.origin = origin
         switch origin {
         case .file(let url):
             name = url.deletingPathExtension().lastPathComponent
-            kind = url.pathExtension.lowercased() == "pixv" ? .pixv : .image
-            formatName = kind == .pixv ? ".pixv" : url.pathExtension.uppercased()
+            let fileExtension = url.pathExtension.lowercased()
+            kind = fileExtension == "pixv" ? .pixv : .image
+            formatName = kind == .pixv ? ".pixv" : (fileExtension == "jpg" ? "JPEG" : fileExtension.uppercased())
             sourceSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
         case .data(let data, let dataName):
             name = dataName
@@ -71,7 +72,7 @@ final class ConversionItem: Identifiable {
             formatName = "PNG"
             sourceSize = nil
         }
-        phase = kind == .pixv ? .done : .waiting
+        phase = .idle
     }
 
     var fileURL: URL? {
@@ -79,9 +80,14 @@ final class ConversionItem: Identifiable {
         return nil
     }
 
-    /// Converted files are only written for items that came from a file: "beside the
-    /// original" needs an original.
+    /// Converted files are written beside the original, so only items that came from a file
+    /// can be converted in place.
     var savesBesideOriginal: Bool { fileURL != nil }
+
+    var isBusy: Bool { phase == .waiting || phase == .working }
+
+    /// What Convert produces for this item.
+    var outputFormatName: String { kind == .pixv ? "PNG" : ".pixv" }
 
     /// How many times smaller the converted file is than the original.
     var ratio: Double? {
